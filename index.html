@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบติดตามตำแหน่ง GPS</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+        .container {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+        }
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            margin-bottom: 30px;
+        }
+        .btn {
+            background: linear-gradient(45deg, #3498db, #2980b9);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 18px;
+            border-radius: 50px;
+            cursor: pointer;
+            display: block;
+            margin: 20px auto;
+            width: 80%;
+            max-width: 300px;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+        }
+        .btn:disabled {
+            background: #bdc3c7;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .status {
+            background: #f8f9fa;
+            border: 2px solid #e9ecef;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            min-height: 100px;
+        }
+        .coordinates {
+            background: #e8f5e8;
+            border: 2px solid #27ae60;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+        }
+        .error {
+            background: #ffeaea;
+            border: 2px solid #e74c3c;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            color: #c0392b;
+        }
+        .success {
+            background: #e8f5e8;
+            border: 2px solid #27ae60;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            color: #27ae60;
+        }
+        .info {
+            text-align: center;
+            color: #7f8c8d;
+            font-size: 14px;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📍 ระบบติดตามตำแหน่ง GPS</h1>
+        
+        <button class="btn" onclick="getLocationAndSend()" id="btnGetLocation">
+            📡 รับตำแหน่งและส่งไปเซิร์ฟเวอร์
+        </button>
+
+        <div id="status" class="status">
+            กดปุ่มด้านบนเพื่อรับตำแหน่งปัจจุบัน
+        </div>
+
+        <div class="info">
+            <strong>คำแนะนำ:</strong><br>
+            1. อนุญาตการเข้าถึงตำแหน่งเมื่อเบราว์เซอร์ถาม<br>
+            2. ต้องเปิดใช้งาน GPS บนมือถือ<br>
+            3. ควรอยู่ในพื้นที่เปิดเพื่อความแม่นยำ
+        </div>
+    </div>
+
+    <script>
+        function getLocationAndSend() {
+            const statusDiv = document.getElementById('status');
+            const btn = document.getElementById('btnGetLocation');
+            
+            statusDiv.innerHTML = '<div style="text-align:center;">🔄 กำลังดึงข้อมูลตำแหน่ง...</div>';
+            btn.disabled = true;
+            btn.innerHTML = 'กำลังประมวลผล...';
+            
+            if (!navigator.geolocation) {
+                showError('เบราว์เซอร์นี้ไม่รองรับการระบุตำแหน่ง');
+                resetButton();
+                return;
+            }
+
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const lat = position.coords.latitude;
+                    const lng = position.coords.longitude;
+                    const accuracy = position.coords.accuracy;
+                    
+                    // แสดงผลบนหน้าเว็บ
+                    statusDiv.innerHTML = `
+                        <div class="coordinates">
+                            <strong>✅ ได้รับพิกัดสำเร็จ!</strong><br><br>
+                            <strong>ละติจูด:</strong> ${lat.toFixed(6)}<br>
+                            <strong>ลองจิจูด:</strong> ${lng.toFixed(6)}<br>
+                            <strong>ความแม่นยำ:</strong> ${accuracy} เมตร<br>
+                            <strong>เวลา:</strong> ${new Date().toLocaleString('th-TH')}
+                        </div>
+                        <div style="text-align:center; margin:10px 0;">
+                            🔄 กำลังส่งข้อมูลไปเซิร์ฟเวอร์...
+                        </div>
+                    `;
+                    
+                    // ส่งไปเซิร์ฟเวอร์
+                    await sendToServer(lat, lng, accuracy);
+                },
+                (error) => {
+                    let errorMessage = '❌ ไม่สามารถรับตำแหน่งได้: ';
+                    switch(error.code) {
+                        case error.PERMISSION_DENIED:
+                            errorMessage += 'ผู้ใช้ปฏิเสธการให้ตำแหน่ง';
+                            break;
+                        case error.POSITION_UNAVAILABLE:
+                            errorMessage += 'ข้อมูลตำแหน่งไม่พร้อมใช้งาน';
+                            break;
+                        case error.TIMEOUT:
+                            errorMessage += 'การรับตำแหน่งใช้เวลานานเกินไป';
+                            break;
+                        default:
+                            errorMessage += 'ข้อผิดพลาดไม่ทราบสาเหตุ';
+                    }
+                    showError(errorMessage);
+                    resetButton();
+                },
+                { 
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 60000 
+                }
+            );
+        }
+
+        async function sendToServer(latitude, longitude, accuracy) {
+            try {
+                // URL ของ API - เปลี่ยนเป็นโดเมนของคุณ
+                const serverURL = 'api/save_location.php';
+                
+                const response = await fetch(serverURL, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        lat: latitude,
+                        lng: longitude,
+                        accuracy: accuracy,
+                        timestamp: new Date().toISOString(),
+                        userAgent: navigator.userAgent,
+                        device: getDeviceType()
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    document.getElementById('status').innerHTML += 
+                        '<div class="success">✅ ส่งข้อมูลไปเซิร์ฟเวอร์สำเร็จ!</div>';
+                } else {
+                    throw new Error(result.message || 'ส่งข้อมูลไม่สำเร็จ');
+                }
+            } catch (error) {
+                document.getElementById('status').innerHTML += 
+                    `<div class="error">❌ ผิดพลาดในการส่งข้อมูล: ${error.message}</div>`;
+            } finally {
+                resetButton();
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('status').innerHTML = 
+                `<div class="error">${message}</div>`;
+        }
+
+        function resetButton() {
+            const btn = document.getElementById('btnGetLocation');
+            btn.disabled = false;
+            btn.innerHTML = '📡 รับตำแหน่งและส่งไปเซิร์ฟเวอร์';
+        }
+
+        function getDeviceType() {
+            const ua = navigator.userAgent;
+            if (/Mobile|Android|iP(hone|od)|IEMobile/.test(ua)) {
+                return 'Mobile';
+            }
+            return 'Desktop';
+        }
+
+        // แสดงข้อมูลเกี่ยวกับการรองรับ GPS
+        window.onload = function() {
+            const infoDiv = document.createElement('div');
+            infoDiv.className = 'info';
+            infoDiv.innerHTML = `
+                <strong>ข้อมูลระบบ:</strong><br>
+                GPS Support: ${navigator.geolocation ? '✅' : '❌'}<br>
+                Protocol: ${window.location.protocol}<br>
+                User Agent: ${navigator.userAgent.substring(0, 50)}...
+            `;
+            document.querySelector('.container').appendChild(infoDiv);
+        };
+    </script>
+</body>
+</html>
